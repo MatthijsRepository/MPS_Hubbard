@@ -1,8 +1,6 @@
 import os
 os.chdir("C:\\Users\\matth\\OneDrive\\Documents\\TUDelft\\MEP\\code\\MPS_Hubbard")
 
-from multiprocessing import Pool
-
 import numpy as np
 from scipy.linalg import expm
 from scipy.sparse.linalg import eigs
@@ -246,33 +244,39 @@ class MPS:
         return 
      
      
-    def apply_foursite_swap(self, TimeOp, i, normalize):
-        # Apply operators on bonds (1,2) and (3,4)
-        #self.apply_twosite(TimeOp[0],i,normalize)
-        #self.apply_twosite(TimeOp[1],i+2,normalize) 
-        
+    def apply_foursite_swap(self, TimeOp_leg, TimeOp_rung, i, normalize):
+        # Apply operators on the legs of the ladder
         # Apply swap (2,3) -> (3,2)
         theta = self.contract(i+1,i+2)
         theta = theta.transpose(0,1,3,2)
         self.decompose_contraction(theta, i+1)
         
-        #Apply operators to bonds (1,3) and (2,4)
-        self.apply_twosite(TimeOp, i, normalize)
-        #self.apply_twosite(TimeOp[2],i,normalize)
-        #self.apply_twosite(TimeOp[3],i+2,normalize)
+        # Apply operators
+        self.apply_twosite(TimeOp_leg, i, normalize)
+        #self.apply_twosite(TimeOp_leg, i+2, normalize)
         
         # Apply swap (3,2) -> (2,3)
         theta = self.contract(i+1,i+2)
         theta = theta.transpose(0,1,3,2)
         self.decompose_contraction(theta, i+1)
+        
+        # Apply operators on the rungs of the ladder
+        # Apply operators on bonds (1,2) and (3,4)
+        #self.apply_twosite(TimeOp_rung,i,normalize)
+        #self.apply_twosite(TimeOp_rung,i+2,normalize) 
+        
+        #Apply operators to bonds (1,3) and (2,4)
+        #self.apply_twosite(TimeOp, i, normalize)
+        #self.apply_twosite(TimeOp[2],i,normalize)
+        #self.apply_twosite(TimeOp[3],i+2,normalize)
         return 
      
-    def TEBD(self, TimeOp, Diss_arr, normalize, Diss_bool):
+    def TEBD(self, TimeOp_leg, TimeOp_rung, Diss_arr, normalize, Diss_bool):
         """ TEBD algorithm """
         for i in range(0, self.N-3, 4):
-            self.apply_foursite_swap(TimeOp, i, normalize)
+            self.apply_foursite_swap(TimeOp_leg, TimeOp_rung, i, normalize)
         #for i in range(2, self.N-3, 4):
-        #    self.apply_foursite_swap(TimeOp, i, normalize)
+        #    self.apply_foursite_swap(TimeOp_leg, TimeOp_rung, i, normalize)
         
         if Diss_bool:
             for i in range(len(Diss_arr["index"])):
@@ -359,7 +363,9 @@ class MPS:
         
         #### Initializing operators and expectation value arrays
         
-        TimeOp = TimeEvol_obj.TimeOp
+        TimeOp_leg = TimeEvol_obj.TimeOp_leg
+        TimeOp_rung = TimeEvol_obj.TimeOp_rung
+        
         Diss_arr = TimeEvol_obj.Diss_arr
         Diss_bool = TimeEvol_obj.Diss_bool
         
@@ -409,7 +415,7 @@ class MPS:
                     exp_values[i,:,t] *= self.expval_chain(desired_expectations[i][1])
             """
                
-            self.TEBD(TimeOp, Diss_arr, normalize, Diss_bool)
+            self.TEBD(TimeOp_leg, TimeOp_rung, Diss_arr, normalize, Diss_bool)
 
         
         #### Plotting expectation values
@@ -509,16 +515,21 @@ class Time_Operator:
         
         if self.is_density==False:
             self.Diss_bool=False
+            print("This code is not capable of simulating MPS type objects anymore")
+            print("Simulation will be stopped")
+            raise ValueError()
        
         #### Creating Hamiltonian and Time operators
         #### Note: Ham_energy is the Hamiltonian to be used for energy calculation
         if self.is_density:
-            self.Ham, self.Ham_energy = self.Create_Dens_Ham()
-        else:
-            self.Ham = self.Create_Ham()
-            self.Ham_energy = self.Ham
+            self.Ham_leg, self.Ham_rung = self.Create_Dens_Ham()
+            #Ham_energy is removed due to complications with the new Hamiltonian
+        #else:
+            #self.Ham = self.Create_Ham()
+            #self.Ham_energy = self.Ham
         
-        self.TimeOp = self.Create_TimeOp(self.dt, self.use_CN)
+        self.TimeOp_leg = self.Create_TimeOp(self.Ham_leg, self.dt, self.use_CN)
+        self.TimeOp_rung = self.Create_TimeOp(self.Ham_rung, self.dt, self.use_CN)
         
         if (self.is_density and self.Diss_bool):
             self.Diss_arr = self.Create_Diss_Array(self.s_coup)
@@ -555,44 +566,41 @@ class Time_Operator:
         Identity = np.eye(self.d**2)
          
         """ Calculates (H otimes I) - (I otimes H)* """
-        H_arr = np.ones((2, self.d**4, self.d**4), dtype=complex)
+        H_arr_leg = np.ones((2, self.d**4, self.d**4), dtype=complex)
+        H_arr_rung = np.ones((2, self.d**4, self.d**4), dtype=complex)
         for i in range(2):
             #SX = np.kron(np.kron(Sx_arr[i], Identity), Sx_arr[i])
             #SY = np.kron(np.kron(Sy_arr[i], Identity), Sy_arr[i])
             #SZ = np.kron(np.kron(Sz_arr[i], Identity), Sz_arr[i])
-            
+            """
             H = np.kron(Sy_arr[i], Sy_arr[i])
             H += np.kron(Sx_arr[i], Sx_arr[i])
-            #H += np.kron(Sz_arr[i], Sz_arr[i])
+            H += np.kron(Sz_arr[i], Sz_arr[i])
             
             H_arr[i] *= H
             """
-            #Sigma x and y hopping connections
-            H = -self.t_hopping/2 * np.kron(SX, Identity) + np.kron(SY, Identity)
-            #Tau x and y connections
-            H -= self.t_hopping/2 * np.kron(Identity, SX) + np.kron(Identity, SY)
+            #x and y hopping connections
+            H_arr_leg[i] = -self.t_hopping/2 * (np.kron(Sx_arr[i], Sx_arr[i]) + np.kron(Sy_arr[i], Sy_arr[i])  )#+ np.kron(Sz_arr[i], Sz_arr[i])     )
             
             #Coulomb interactions
-            H += self.U_coulomb/4 * np.kron(np.kron(Sz_arr[i]+Identity, Sz_arr[i]+Identity) , np.eye(d**4))
-            H += self.U_coulomb/4 * np.kron(np.eye(d**4) , np.kron(Sz_arr[i]+Identity, Sz_arr[i]+Identity))
-            H_arr[i] *= H
-            """
+            H_arr_rung[i] = self.U_coulomb/4 * np.kron(Sz_arr[i]+Identity, Sz_arr[i]+Identity)
+            #"""
         #Note: H_arr[0] is the correct Hamiltonian to use for energy calculations
-        return (H_arr[0] - np.conj(H_arr[1])), H_arr[0]     
+        return (H_arr_leg[0] - np.conj(H_arr_leg[1])), (H_arr_rung[0] - np.conj(H_arr_rung[1]))    
 
-    def Create_TimeOp(self, dt, use_CN):
+    def Create_TimeOp(self, Ham, dt, use_CN):
         if self.is_density:
             U = np.ones((self.N-1, self.d**4, self.d**4), dtype=complex)
         else:
             U = np.ones((self.N-1, self.d**2, self.d**2), dtype=complex)
         
         if use_CN:
-            U = self.create_crank_nicolson(self.Ham, dt)
+            U = self.create_crank_nicolson(Ham, dt)
             #U[0,:,:] = self.create_crank_nicolson(self.Ham[0], dt)
             #U[self.N-2,:,:] = self.create_crank_nicolson(self.Ham[self.N-2], dt)
             #U[1:self.N-2,:,:] *= self.create_crank_nicolson(self.Ham[1], dt) # we use broadcasting
         else:
-            U = expm(-1j*dt*self.Ham)
+            U = expm(-1j*dt*Ham)
             #U[0,:,:] = expm(-1j*dt*self.Ham[0])
             #U[self.N-2,:,:] = expm(-1j*dt*self.Ham[self.N-2])
             #U[1:self.N-2,:,:] *= expm(-1j*dt*self.Ham[1]) # we use broadcasting
@@ -743,19 +751,16 @@ def calculate_thetas_threesite(state):
 
 
 ####################################################################################
-
-max_cores=3
-
 t0 = time.time()
 #### Simulation variables
 N=8
 d=2
 chi=20      #MPS truncation parameter
-newchi=25   #DENS truncation parameter
+newchi=30   #DENS truncation parameter
 
 im_steps = 0
 im_dt = -0.03j
-steps=200
+steps=150
 dt = 0.02
 
 normalize = False
@@ -771,7 +776,7 @@ flip_threshold = 0.05 #Threshold below which an <Sz> sign flip is not flagged as
 #JXY=1#1
 #JZ=1
 t_hopping = 1
-U_coulomb =1
+U_coulomb = 0
 
 s_coup=1
 mu=0.2
@@ -804,7 +809,7 @@ NORM_state.threesite_thetas = calculate_thetas_threesite(NORM_state)
 
 #### Loading and saving states
 loadstate_folder = "data\\"
-loadstate_filename = "0131_2100_DENS1_N12_chi40.pkl"
+loadstate_filename = "1128_1913_DENS1_N10_chi30.pkl"
 
 save_state_bool = False
 load_state_bool = False
@@ -825,23 +830,25 @@ def main():
     else:
         MPS1 = MPS(1, N,d,chi, False)
         #MPS1.Gamma_mat[:,:,:,:], MPS1.Lambda_mat[:,:], MPS1.locsize[:] = initialize_halfstate(N,d,chi)
-        MPS1.Gamma_mat[:,:,:,:], MPS1.Lambda_mat[:,:], MPS1.locsize[:] = initialize_LU_RD(N,d,chi, scale_factor = 0.8)
+        MPS1.Gamma_mat[:,:,:,:], MPS1.Lambda_mat[:,:], MPS1.locsize[:] = initialize_LU_RD(N,d,chi, scale_factor = -0.8)
         #temp = np.zeros((d,chi,chi))
         #temp[0,0,0] = np.sqrt(4/5)
         #temp[1,0,0] = 1/np.sqrt(5)
         #MPS1.set_Gamma_singlesite(0, temp)
         
         DENS1 = create_superket(MPS1, newchi)
-    
+
     #creating time evolution object
     TimeEvol_obj1 = Time_Operator(N, d, t_hopping, U_coulomb, s_coup, dt, Diss_bool, True, use_CN)
     #TimeEvol_obj2 = Time_Operator(N, d, JXY, JZ, h, s_coup, dt, False, False, use_CN)
     
     #declaring which desired operator expectations must be tracked
+    
+    
     desired_expectations = []
     desired_expectations.append(("Sz", np.kron(Sz, np.eye(d)), False, 0))
-    #desired_expectations.append(("Sz", np.kron(Sz, np.eye(d)), True, 0))
-    #desired_expectations.append(("Sz", np.kron(Sz, np.eye(d)), True, 6))
+    #### This is not used!
+    
     
     pure_desired_expectations = []
     pure_desired_expectations.append(("Sz", Sz, False, 0))
