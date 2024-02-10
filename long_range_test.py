@@ -1,5 +1,5 @@
 import os
-os.chdir("C:\\Users\\matth\\OneDrive\\Documents\\TUDelft\\MEP\\code\\MPS_basic_transport")
+os.chdir("C:\\Users\\matth\\OneDrive\\Documents\\TUDelft\\MEP\\code\\MPS_Hubbard")
 
 import numpy as np
 from scipy.linalg import expm
@@ -182,7 +182,7 @@ class MPS:
             else:
                 theta_prime = theta_prime.transpose(1,2,0)
                 #Here we must contract Lambda with V for the next SVD. The contraction runs over the correct index (the chi resulting from the previous SVD, not the one incorporated with d**(temp-j))
-                theta_prime = np.tensordot(np.diag(Y[:chi]), theta_prime, axes=(1,1))
+                theta = np.tensordot(np.diag(Y[:self.chi]), theta_prime, axes=(1,1))
         return
     
     def apply_singlesite(self, TimeOp, i, normalize):
@@ -773,17 +773,17 @@ t0 = time.time()
 #### Simulation variables
 N=8
 d=2
-chi=6      #MPS truncation parameter
+chi=10      #MPS truncation parameter
 newchi=20   #DENS truncation parameter
 
 im_steps = 0
 im_dt = -0.03j
-steps=800
-dt = 0.02
+steps=150
+#dt = 0.02
 
 normalize = False
 use_CN = False #choose if you want to use Crank-Nicolson approximation
-Diss_bool = True
+Diss_bool = False
 renormalization_type = 0        # 0 for lambdas, 1 for gammas
 
 flip_threshold = 0.01 #Threshold below which an <Sz> sign flip is not flagged as being caused by the SVD
@@ -843,16 +843,16 @@ def main():
     else:
         MPS1 = MPS(1, N,d,chi, False)
         #MPS1.Gamma_mat[:,:,:,:], MPS1.Lambda_mat[:,:], MPS1.locsize[:] = initialize_halfstate(N,d,chi)
-        MPS1.Gamma_mat[:,:,:,:], MPS1.Lambda_mat[:,:], MPS1.locsize[:] = initialize_LU_RD(N,d,chi, scale_factor = 0.6 )
+        MPS1.Gamma_mat[:,:,:,:], MPS1.Lambda_mat[:,:], MPS1.locsize[:] = initialize_LU_RD(N,d,chi, scale_factor = -0.8 )
         #temp = np.zeros((d,chi,chi))
         #temp[0,0,0] = np.sqrt(4/5)
         #temp[1,0,0] = 1/np.sqrt(5)
         #MPS1.set_Gamma_singlesite(0, temp)
         
-        DENS1 = create_superket(MPS1, newchi)
+        #DENS1 = create_superket(MPS1, newchi)
     
     #creating time evolution object
-    TimeEvol_obj1 = Time_Operator(N, d, JXY, JZ, h, s_coup, dt, Diss_bool, True, use_CN)
+    #TimeEvol_obj1 = Time_Operator(N, d, JXY, JZ, h, s_coup, dt, Diss_bool, True, use_CN)
     #TimeEvol_obj2 = Time_Operator(N, d, JXY, JZ, h, s_coup, dt, False, False, use_CN)
     
     #declaring which desired operator expectations must be tracked
@@ -883,11 +883,13 @@ def main():
     #Ham = np.kron(np.kron(Sz, Sz), np.eye(d**2)) + np.kron(np.kron(Sx, Sx), np.eye(d**2)) + np.kron(np.kron(Sy, Sy), np.eye(d**2))
     #Ham += np.kron(np.eye(d**2), np.kron(Sz,Sz)) + np.kron(np.eye(d**2), np.kron(Sx,Sx)) + np.kron(np.eye(d**2), np.kron(Sy,Sy))
     
-
-    Ham_two = np.kron(Sz,Sz) + np.kron(Sx,Sx) + np.kron(Sy,Sy)
+    t_hopping=1
     
-    test_steps = 400
-    test_dt = 0.01
+    Ham_two = np.kron(Sx,Sx) + np.kron(Sy,Sy) #+ np.kron(Sz,Sz)
+    Ham_two *= -t_hopping/2
+    
+    test_steps = 150
+    test_dt = 0.02
     expvals = np.zeros((N, test_steps+1))
     
     OPP = expm(-1j*test_dt*Ham_two)
@@ -902,13 +904,21 @@ def main():
             #expvals[j,0] = DENS1.expval(np.kron(Sz, np.eye(d)),j)
     
     for i in range(test_steps):
+        if (i%500==0):
+            print(i)
         #MPS1.apply_foursite(OPP,0, False)
         #MPS1.apply_foursite(OPP,4, False)
         #MPS1.apply_foursite(OPP,2, False)
         
+        for j in range(0,N-3,4):
+            MPS1.apply_foursite_swap(OPP, j, normalize)
+            
+        
         #MPS1.apply_foursite_swap(OPP_swap,0,False)
-        MPS1.apply_foursite_swap(OPP, 0, normalize)
+
         #MPS1.apply_foursite_swap(OPP, 2, normalize)
+        #MPS1.apply_foursite_swap(OPP, 4, normalize)
+        #MPS1.apply_foursite_swap(OPP, 6, normalize)
         
         #DENS1.apply_foursite_swap(OPP,0,normalize)
         #DENS1.apply_foursite_swap(OPP,2,normalize)
@@ -918,15 +928,19 @@ def main():
             expvals[j,i+1] = MPS1.expval(Sz, j)
             #expvals[j,i+1] = DENS1.expval(np.kron(Sz, np.eye(d)),j)
     
+    x_axis = np.linspace(0, test_dt*(test_steps+1), test_steps+1)
     for j in range(N):
-        plt.plot(expvals[j], label=f"{j}")
-    plt.legend()
+        plt.plot(x_axis, expvals[j], label=f"Site {j}")
+    plt.xlabel("Time")
+    plt.ylabel("<Sz>")
+    plt.ylim((-0.95,0.95))
+    plt.title("<Sz> of MPS1 over time")
+    plt.legend(bbox_to_anchor=(1.04, 0.5), loc="center left", borderaxespad=0)
     plt.grid()
     plt.show()
         
+    print(expvals[1,0]-expvals[1,75])
     
-    
-    print(MPS1.expval(Sz,0) + MPS1.expval(Sz,1))
     
     """
     #OPP = np.eye(d**8)
