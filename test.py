@@ -353,7 +353,7 @@ class MPS:
         #"""
         #NOTE:  for singlesite expectations the expectation <<p |A| p>> matches the result for pure state evolutions
         #        hence that specific expectation should be used
-        if 1==2:# self.is_density:     #In case of density matrices we must take the trace  
+        if 1==2: #self.is_density:     #In case of density matrices we must take the trace  
             return np.real(np.tensordot(theta_prime, NORM_state.singlesite_thetas, axes=([0,1,2],[2,1,0])))
         else:
             return np.real(np.tensordot(theta_prime, np.conj(theta), axes=([0,1,2],[0,1,2])))
@@ -850,7 +850,7 @@ def main():
         #MPS1.set_Gamma_singlesite(0, temp)
         
         DENS1 = create_superket(MPS1, newchi)
-    #"""    
+    """    
     DENS1.Gamma_mat[:] *= 0
     DENS1.Gamma_mat[0,0,0,0] = 3/4 
     DENS1.Gamma_mat[0,1,0,0] = 1/4 
@@ -976,7 +976,7 @@ def main():
             MPS1.apply_foursite_swap(OPP, j, normalize)
             DENS1.apply_foursite_swap(OPP_Dens, j, normalize)
         
-        """
+        #"""
         if (t>=1):
             expvals_Dens[:,t] *= DENS1.flipped_factor
             sign_flips = DENS1.sign_flip_check(expvals_Dens[:,t-1:t+1].copy())
