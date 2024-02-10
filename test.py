@@ -850,7 +850,7 @@ def main():
         #MPS1.set_Gamma_singlesite(0, temp)
         
         DENS1 = create_superket(MPS1, newchi)
-    """    
+    #"""    
     DENS1.Gamma_mat[:] *= 0
     DENS1.Gamma_mat[0,0,0,0] = 3/4 
     DENS1.Gamma_mat[0,1,0,0] = 1/4 
@@ -867,6 +867,9 @@ def main():
     DENS1.Gamma_mat[2,2,0,0] = 1/4 
     DENS1.Gamma_mat[2,3,0,0] = 3/4
     #"""
+    
+    test_theta = np.zeros((newchi, newchi, 4, 4, 4), dtype=complex)
+    #test_theta[0,0,]
     
     #creating time evolution object
     #TimeEvol_obj1 = Time_Operator(N, d, JXY, JZ, h, s_coup, dt, Diss_bool, True, use_CN)
@@ -930,11 +933,20 @@ def main():
     #print(DENS1.Gamma_mat[0,1,:1,:4])
     #print(DENS1.Gamma_mat[0,2,:1,:4])
     #print(DENS1.Gamma_mat[0,3,:1,:4])
-    theta = DENS1.contract(0,2)
-    DENS1.decompose_contraction(theta, 0)
-    theta=DENS1.contract(0,2)
-    print(np.shape(theta))
-    print(np.real(theta[0,0].reshape(8,8)))
+    #theta = DENS1.contract(0,2)
+    #DENS1.decompose_contraction(theta, 0)
+    
+    a = np.load("C:\\Users\\matth\\OneDrive\\Documents\\TUDelft\\MEP\\code\\MPS_Hubbard\\temp.npy")
+    DENS1.decompose_contraction(a, 0)
+    
+    #theta=DENS1.contract(0,2)
+    #print(np.shape(theta))
+    #theta = theta[0,0].reshape(2,2,2,2,2,2)
+    #theta = theta.transpose(0,2,4,1,3,5)
+    #theta = theta.reshape((8,8))
+    #print(theta)
+    
+    
     #print(DENS1.Gamma_mat[0,0,:1,:4])
     #print(DENS1.Gamma_mat[0,1,:1,:4])
     #print(DENS1.Gamma_mat[0,2,:1,:4])
@@ -984,10 +996,10 @@ def main():
             #expvals[j,i+1] = DENS1.expval(np.kron(Sz, np.eye(d)),j)
     
     
-    print(DENS1.Gamma_mat[0,0,:1,:4])
-    print(DENS1.Gamma_mat[0,1,:1,:4])
-    print(DENS1.Gamma_mat[0,2,:1,:4])
-    print(DENS1.Gamma_mat[0,3,:1,:4])
+    #print(DENS1.Gamma_mat[0,0,:1,:4])
+    #print(DENS1.Gamma_mat[0,1,:1,:4])
+    #print(DENS1.Gamma_mat[0,2,:1,:4])
+    #print(DENS1.Gamma_mat[0,3,:1,:4])
     
     
     

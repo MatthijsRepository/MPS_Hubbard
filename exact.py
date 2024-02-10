@@ -49,8 +49,13 @@ psi_2 = psi_2.T
 rho = 1/2* (np.matmul(psi, np.conj(psi.T)) + np.matmul(psi_2, np.conj(psi_2.T)))
 print(np.real(rho))
 
-print(np.trace(np.matmul(rho, rho)))
-
+theta = np.zeros((20, 20, 4, 4, 4), dtype=complex)
+temp = rho.reshape((2,2,2,2,2,2))
+temp = temp.transpose((0,3,1,4,2,5))
+temp = temp.reshape((4,4,4))
+theta[0,0] = temp
+#np.save("C:\\Users\\matth\\OneDrive\\Documents\\TUDelft\\MEP\\code\\MPS_Hubbard\\temp.npy",theta)
+#a = np.load("C:\\Users\\matth\\OneDrive\\Documents\\TUDelft\\MEP\\code\\MPS_Hubbard\\temp.npy")
 
 
 Sz_exp = np.zeros((3, d**3, d**3))
