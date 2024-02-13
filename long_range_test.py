@@ -392,7 +392,7 @@ class MPS:
             st2 = np.tensordot(temp_gammas[j,:,:,:],np.diag(temp_lambdas[j+1,:]), axes=(2,0)) #(d, chi, chi)
             mp = np.tensordot(np.conj(st1), st2, axes=(0,0)) #(chi, chi, chi, chi)    
             m_total = np.tensordot(m_total,mp,axes=([0,1],[0,2]))    
-        return abs(m_total[0,0])
+        return np.real(m_total[0,0])
     
     def calculate_norm(self):
         """ Calculates the norm of the MPS """
@@ -778,7 +778,7 @@ newchi=20   #DENS truncation parameter
 
 im_steps = 0
 im_dt = -0.03j
-steps=150
+steps=0
 #dt = 0.02
 
 normalize = False
@@ -843,7 +843,7 @@ def main():
     else:
         MPS1 = MPS(1, N,d,chi, False)
         #MPS1.Gamma_mat[:,:,:,:], MPS1.Lambda_mat[:,:], MPS1.locsize[:] = initialize_halfstate(N,d,chi)
-        MPS1.Gamma_mat[:,:,:,:], MPS1.Lambda_mat[:,:], MPS1.locsize[:] = initialize_LU_RD(N,d,chi, scale_factor = -0.8 )
+        MPS1.Gamma_mat[:,:,:,:], MPS1.Lambda_mat[:,:], MPS1.locsize[:] = initialize_LU_RD(N,d,chi, scale_factor = 1 )
         #temp = np.zeros((d,chi,chi))
         #temp[0,0,0] = np.sqrt(4/5)
         #temp[1,0,0] = 1/np.sqrt(5)
@@ -885,10 +885,12 @@ def main():
     
     t_hopping=1
     
+    
+    
     Ham_two = np.kron(Sx,Sx) + np.kron(Sy,Sy) #+ np.kron(Sz,Sz)
     Ham_two *= -t_hopping/2
     
-    test_steps = 150
+    test_steps = 2000
     test_dt = 0.02
     expvals = np.zeros((N, test_steps+1))
     
@@ -912,7 +914,8 @@ def main():
         
         for j in range(0,N-3,4):
             MPS1.apply_foursite_swap(OPP, j, normalize)
-            
+        for j in range(2,N-3,4):
+            MPS1.apply_foursite_swap(OPP, j, normalize)
         
         #MPS1.apply_foursite_swap(OPP_swap,0,False)
 
@@ -933,7 +936,7 @@ def main():
         plt.plot(x_axis, expvals[j], label=f"Site {j}")
     plt.xlabel("Time")
     plt.ylabel("<Sz>")
-    plt.ylim((-0.95,0.95))
+    plt.ylim((-1.05,1.05))
     plt.title("<Sz> of MPS1 over time")
     plt.legend(bbox_to_anchor=(1.04, 0.5), loc="center left", borderaxespad=0)
     plt.grid()

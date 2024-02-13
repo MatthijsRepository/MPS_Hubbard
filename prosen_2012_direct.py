@@ -245,20 +245,46 @@ class MPS:
      
      
     def apply_foursite_swap(self, TimeOp_leg, TimeOp_rung, i, normalize):
+        #U = np.zeros((self.d**2,self.d**2))
+        #ind_1 = np.arange(16)
+        #ind_2 = np.array([0,4,8,12,1,5,9,13,2,6,10,14,3,7,11,15])
+        #U[ind_1, ind_2] = 1
+        
+       
         # Apply operators on the legs of the ladder
+
         # Apply swap (2,3) -> (3,2)
+        #theta = self.contract(i+1,i+2)
+        #theta = theta.transpose(0,1,3,2)
+        #self.decompose_contraction(theta, i+1)
+        #self.apply_twosite(U, i+1, False)
+        
+        
         theta = self.contract(i+1,i+2)
         theta = theta.transpose(0,1,3,2)
         self.decompose_contraction(theta, i+1)
+        
+        #theta = self.contract(i-1,i+3) #(chi, chi, d, d, d, d, d)
+        #theta = theta.transpose(0,1,6,3,4,5,2)
+        #self.decompose_contraction(theta, i-1)
         
         # Apply operators
         self.apply_twosite(TimeOp_leg, i, normalize)
         #self.apply_twosite(TimeOp_leg, i+2, normalize)
         
-        # Apply swap (3,2) -> (2,3)
+        #theta = self.contract(i-1,i+3) #(chi, chi, d, d, d, d, d)
+        #theta = theta.transpose(0,1,6,3,4,5,2)
+        #self.decompose_contraction(theta, i-1)
+        
         theta = self.contract(i+1,i+2)
         theta = theta.transpose(0,1,3,2)
         self.decompose_contraction(theta, i+1)
+        
+        # Apply swap (3,2) -> (2,3)
+        #theta = self.contract(i+1,i+2)
+        #theta = theta.transpose(0,1,3,2)
+        #self.decompose_contraction(theta, i+1)
+        #self.apply_twosite(U, i+1, False)
         
         # Apply operators on the rungs of the ladder
         # Apply operators on bonds (1,2) and (3,4)
@@ -275,8 +301,8 @@ class MPS:
         """ TEBD algorithm """
         for i in range(0, self.N-3, 4):
             self.apply_foursite_swap(TimeOp_leg, TimeOp_rung, i, normalize)
-        #for i in range(2, self.N-3, 4):
-        #    self.apply_foursite_swap(TimeOp_leg, TimeOp_rung, i, normalize)
+        for i in range(2, self.N-3, 4):
+            self.apply_foursite_swap(TimeOp_leg, TimeOp_rung, i, normalize)
         
         if Diss_bool:
             for i in range(len(Diss_arr["index"])):
@@ -300,7 +326,11 @@ class MPS:
         #NOTE:  for singlesite expectations the expectation <<p |A| p>> matches the result for pure state evolutions
         #        hence that specific expectation should be used
         if self.is_density:     #In case of density matrices we must take the trace  
-            return np.real(np.tensordot(theta_prime, NORM_state.singlesite_thetas, axes=([0,1,2],[2,1,0])))
+            self.apply_singlesite(Op, site, False)
+            a = self.calculate_vidal_inner_wow(NORM_state)
+            self.apply_singlesite(Op, site, False)
+            return a
+            #return np.real(np.tensordot(theta_prime, NORM_state.singlesite_thetas, axes=([0,1,2],[2,1,0])))
         else:
             return np.real(np.tensordot(theta_prime, np.conj(theta), axes=([0,1,2],[0,1,2])))
     
@@ -376,25 +406,57 @@ class MPS:
         if track_energy:
             energy = np.zeros(steps)
         if (track_current==True and Diss_bool==True):
-            if steps>current_cutoff:
-                spin_current_values = np.zeros(steps-current_cutoff)
+            spin_current_values = np.zeros(steps)
         
         exp_values = np.ones((len(desired_expectations), self.N, steps)) #array to store expectation values in
                     
         #### Time evolution steps
         
+        
+        """
+        normDENS = create_maxmixed_normstate()
+        normDENS.Gamma_mat *=0
+        
+        test_theta = np.zeros((newchi, newchi, 4, 4, 4, 4), dtype=complex)
+        temp = np.eye(2**4, 2**4).reshape((2,2,2,2, 2,2,2,2))
+        temp = temp.transpose((0,4, 1,5, 2,6, 3,7))
+        temp = temp.reshape((4,4,4,4))
+        test_theta[0,0] = temp
+        
+        normDENS.decompose_contraction(test_theta, 0)
+        Sz_expvals_test = np.zeros((self.N, steps),dtype=float)
+        #"""
+        #self.flipped_factor[4:] = 1
+        
         print(f"Starting time evolution of {self.name}")
         for t in range(steps):
+            if (t==0 or t==75):
+                print("t")
+                self.calculate_vidal_inner_wow(NORM_state)
             if (t%20==0):
                 print(t)
+                
+            #if t==1:
+            #    theta = self.contract(0,3)
+            #    self.decompose_contraction(theta, 0)
+                
             
             #Sz_expvals[:,t] = self.expval_chain(np.kron(Sz,np.eye(d)))
             for i in range(self.N):
                 Sz_expvals[i,t] = self.expval(np.kron(Sz, np.eye(d)), i)
+                
+                #self.apply_singlesite(np.kron(Sz, np.eye(d)), i, False)
+                #Sz_expvals_test[i,t] = self.calculate_vidal_inner(normDENS)
+                #self.apply_singlesite(np.kron(Sz, np.eye(d)), i, False)
+
             if (t>=1):
                 Sz_expvals[:,t] *= self.flipped_factor
+                #Sz_expvals_test[:,t] *= self.flipped_factor
                 sign_flips = self.sign_flip_check(Sz_expvals[:,t-1:t+1].copy())
                 Sz_expvals[sign_flips,t] *= -1
+                #Sz_expvals_test[sign_flips,t] *= -1
+                
+
                 
             
             if track_normalization:
@@ -404,9 +466,8 @@ class MPS:
             if track_energy:
                 energy[t] = self.calculate_energy(TimeEvol_obj)
             if (track_current==True and Diss_bool==True):
-                if t>=current_cutoff:
-                    middle_site = int(np.round(self.N/2-1))
-                    spin_current_values[t-current_cutoff] = self.flipped_factor[middle_site] * self.flipped_factor[middle_site+1] * np.real( self.expval_twosite(spin_current_op, middle_site) )
+                middle_site = int(np.round(self.N/2-1))
+                spin_current_values[t] = self.flipped_factor[middle_site] * self.flipped_factor[middle_site+1] * np.real( self.expval_twosite(spin_current_op, middle_site) )
             """              
             for i in range(len(desired_expectations)):
                 if desired_expectations[i][2] == True:
@@ -424,9 +485,11 @@ class MPS:
         
         for i in range(self.N):
             plt.plot(time_axis, Sz_expvals[i,:], label="Site "+str(i))
+            #plt.plot(time_axis, Sz_expvals_test[i,:])
         plt.title(f"<Sz> of {self.name} over time")
         plt.xlabel("Time")
         plt.ylabel("Sz")
+        plt.ylim((-1.05,1.05))
         plt.grid()
         plt.legend(bbox_to_anchor=(1.04, 0.5), loc="center left", borderaxespad=0)
         plt.show()
@@ -475,6 +538,19 @@ class MPS:
             plt.show()
         """
         return
+    
+    
+    def calculate_vidal_inner_wow(self, MPS2):
+        """ Calculates the inner product of the MPS with another MPS """
+        m_total = np.eye(self.chi)
+        temp_gammas, temp_lambdas = MPS2.Gamma_mat, MPS2.Lambda_mat  #retrieve gammas and lambdas of MPS2
+        for j in range(0, self.N):        
+            st1 = np.tensordot(self.Gamma_mat[j,:,:,:],np.diag(self.Lambda_mat[j+1,:]), axes=(2,0)) #(d, chi, chi)
+            st2 = np.tensordot(temp_gammas[j,:,:,:],np.diag(temp_lambdas[j+1,:]), axes=(2,0)) #(d, chi, chi)
+            mp = np.tensordot(np.conj(st1), st2, axes=(0,0)) #(chi, chi, chi, chi)    
+            m_total = np.tensordot(m_total,mp,axes=([0,1],[0,2])) 
+        return np.real(m_total[0,0])
+    
     
     def force_normalization(self, normalization):
         global renormalization_type
@@ -580,13 +656,15 @@ class Time_Operator:
             H_arr[i] *= H
             """
             #x and y hopping connections
-            H_arr_leg[i] = -self.t_hopping/2 * (np.kron(Sx_arr[i], Sx_arr[i]) + np.kron(Sy_arr[i], Sy_arr[i])  )#+ np.kron(Sz_arr[i], Sz_arr[i])     )
+            H_arr_leg[i] = -self.t_hopping/2 * (np.kron(Sx_arr[i], Sx_arr[i]) + np.kron(Sy_arr[i], Sy_arr[i]) )#+ np.kron(Sz_arr[i], Sz_arr[i])     )
             
             #Coulomb interactions
             H_arr_rung[i] = self.U_coulomb/4 * np.kron(Sz_arr[i]+Identity, Sz_arr[i]+Identity)
             #"""
         #Note: H_arr[0] is the correct Hamiltonian to use for energy calculations
-        return (H_arr_leg[0] - np.conj(H_arr_leg[1])), (H_arr_rung[0] - np.conj(H_arr_rung[1]))    
+        #return (H_arr_leg[0] - np.conj(H_arr_leg[1])), (H_arr_rung[0] - np.conj(H_arr_rung[1]))    
+        return (H_arr_leg[0] - np.transpose(H_arr_leg[1])), (H_arr_rung[0] - np.transpose(H_arr_rung[1]))    
+
 
     def Create_TimeOp(self, Ham, dt, use_CN):
         if self.is_density:
@@ -755,12 +833,12 @@ t0 = time.time()
 #### Simulation variables
 N=8
 d=2
-chi=20      #MPS truncation parameter
-newchi=30   #DENS truncation parameter
+chi=10      #MPS truncation parameter
+newchi=25   #DENS truncation parameter
 
 im_steps = 0
 im_dt = -0.03j
-steps=150
+steps=2000
 dt = 0.02
 
 normalize = False
@@ -768,7 +846,7 @@ use_CN = False #choose if you want to use Crank-Nicolson approximation
 Diss_bool = False
 renormalization_type = 0        # 0 for lambdas, 1 for gammas
 
-flip_threshold = 0.05 #Threshold below which an <Sz> sign flip is not flagged as being caused by the SVD
+flip_threshold = 0.02 #Threshold below which an <Sz> sign flip is not flagged as being caused by the SVD
 
 
 #### Hamiltonian and Lindblad constants
@@ -779,7 +857,7 @@ t_hopping = 1
 U_coulomb = 0
 
 s_coup=1
-mu=0.2
+mu=0.01
 mu_plus = np.sqrt(s_coup*(1+mu))
 mu_min = np.sqrt(s_coup*(1-mu))  
 
@@ -793,8 +871,8 @@ Sz = np.array([[1,0],[0,-1]])
 
 
 #### Spin current operator and cutoff factor
-cutoff_factor = 0.1
-current_cutoff=round(steps * cutoff_factor) 
+#cutoff_factor = 0.1
+#current_cutoff=round(steps * cutoff_factor) 
 spin_current_op = 2 * ( np.kron( np.kron(Sx, np.eye(d)) , np.kron(Sy, np.eye(d))) - np.kron( np.kron(Sy, np.eye(d)) , np.kron(Sx, np.eye(d))) )
 #equivalent operator in terms of Sp and Sm
 #spin_current_op = 2*1j* ( np.kron( np.kron(Sp, np.eye(d)) , np.kron(Sm, np.eye(d))) - np.kron( np.kron(Sm, np.eye(d)) , np.kron(Sp, np.eye(d))) )
@@ -805,6 +883,20 @@ NORM_state = create_maxmixed_normstate()
 NORM_state.singlesite_thetas = calculate_thetas_singlesite(NORM_state)
 NORM_state.twosite_thetas = calculate_thetas_twosite(NORM_state)
 NORM_state.threesite_thetas = calculate_thetas_threesite(NORM_state)
+
+"""
+normDENS = create_maxmixed_normstate()
+normDENS.Gamma_mat *=0
+
+test_theta = np.zeros((newchi, newchi, 4, 4, 4, 4), dtype=complex)
+temp = np.eye(2**4, 2**4).reshape((2,2,2,2, 2,2,2,2))
+temp = temp.transpose((0,4, 1,5, 2,6, 3,7))
+temp = temp.reshape((4,4,4,4))
+test_theta[0,0] = temp
+
+normDENS.decompose_contraction(test_theta, 0)
+Sz_expvals_test = np.zeros((self.N, steps),dtype=float)
+#"""
 
 
 #### Loading and saving states
@@ -830,7 +922,7 @@ def main():
     else:
         MPS1 = MPS(1, N,d,chi, False)
         #MPS1.Gamma_mat[:,:,:,:], MPS1.Lambda_mat[:,:], MPS1.locsize[:] = initialize_halfstate(N,d,chi)
-        MPS1.Gamma_mat[:,:,:,:], MPS1.Lambda_mat[:,:], MPS1.locsize[:] = initialize_LU_RD(N,d,chi, scale_factor = -0.8)
+        MPS1.Gamma_mat[:,:,:,:], MPS1.Lambda_mat[:,:], MPS1.locsize[:] = initialize_LU_RD(N,d,chi, scale_factor = 1)
         #temp = np.zeros((d,chi,chi))
         #temp[0,0,0] = np.sqrt(4/5)
         #temp[1,0,0] = 1/np.sqrt(5)

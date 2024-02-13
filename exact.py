@@ -8,10 +8,11 @@ Sx = np.array([[0,1], [1,0]])
 Sy = np.array([[0,-1j], [1j,0]])
 Sz = np.array([[1,0],[0,-1]])
 
+N=3
 t_coupling = 1
 d = 2
-dt = 0.01
-steps = 300
+dt = 0.02
+steps = 150
 
 
 
@@ -47,7 +48,7 @@ psi_2 = psi_2.T
 
 #Creating density matrix
 rho = 1/2* (np.matmul(psi, np.conj(psi.T)) + np.matmul(psi_2, np.conj(psi_2.T)))
-print(np.real(rho))
+
 
 theta = np.zeros((20, 20, 4, 4, 4), dtype=complex)
 temp = rho.reshape((2,2,2,2,2,2))
@@ -77,6 +78,8 @@ def calc_dens_expvals(State):
     result = np.round(result, decimals=15)
     return np.real(result)
 
+
+print(calc_dens_expvals(np.matmul(rho, rho)))
 
 
 rho_1 = np.ones((d**3, d**3), dtype=complex)
@@ -117,10 +120,16 @@ for i in range(steps):
 #plt.title("Rho_1")
 #plt.show()
 
+x_range = np.linspace(0,dt*steps, steps+1)
+
 for i in range(3):
-    plt.plot(expvals_rho_2[i])
+    plt.plot(x_range, expvals_rho_2[i], label=f"Site {i}")
 #plt.title("Rho_2")
 plt.ylim((-1.05, 1.05))
+plt.title("Exact solution")
+plt.ylabel("<Sz>")
+plt.xlabel("Time")
+plt.legend(bbox_to_anchor=(1.04, 0.5), loc="center left", borderaxespad=0)
 plt.grid()
 plt.show()
 
@@ -132,11 +141,93 @@ print(expvals_rho_2[:,-1])
 
 
 
+theta = np.transpose(np.eye(16).reshape((2,2,2,2,2,2,2,2)), (0,4,1,5,2,6,3,7))
+#theta = np.transpose(np.eye(8).reshape((2,2,2,2,2,2)), (0,3,1,4,2,5))
+theta = theta.reshape((4,4,4,4))
+np.save("C:\\Users\\matth\\OneDrive\\Documents\\TUDelft\\MEP\\code\\MPS_Hubbard\\I_twosite.npy",theta)
+
+
+a=0.176776695 # = 2^(-5/2)
+# bijbehorende lambda 2.82842712 = 2^(3/2)
+
+#structuur Gammas
+# 2^(-1/2)
+# 2^(-4/2) én 2^(-5/2)
+# 2^(-1/2)
+# structuur Lambdas
+# 2^(3/2)
+# 2^(3/2)
+
+
+b = 0.144337567
+print("here")
+
+
+print(a)
+
+print(1/2**(1/2))
+print(1/2**(4/2))
+print(1/2**(5/2))
+print(2**(3/2))
+
+
+
+test_expvals = np.load("C:\\Users\\matth\\OneDrive\\Documents\\TUDelft\\MEP\\code\\MPS_Hubbard\\expvals_hope_good.npy")
+
+test_expvals[2] *= -1
+test_expvals[0,40:118] *= -1
+test_expvals[2,40:118] *= -1
+
+
+diff = test_expvals - expvals_rho_2
+diff = np.round(diff, decimals=13)
+print(diff[np.nonzero(diff)])
+
+
+for i in range(3):
+    plt.plot(test_expvals[i])
+    
 
 
 
 
+test = np.kron(np.array([1,0,0,1]), np.array([1,0,0,1]))
+test = np.kron(test, test)
 
+test = test.reshape((4,64))
+U1, S, V = np.linalg.svd(test, full_matrices=False)
+U1 = np.matmul(U1, np.diag(np.sqrt(S)))
+V = np.matmul(np.diag(np.sqrt(S)), V)
+
+print(np.round(U1, decimals=12))
+print()
+
+
+V = V.reshape(16, 16)
+U2, S, V = np.linalg.svd(V, full_matrices=False)
+U2 = np.matmul(U2, np.diag(np.sqrt(S)))
+V = np.matmul(np.diag(np.sqrt(S)), V)
+
+print(np.round(U2, decimals=12))
+print()
+
+U3, S, V = np.linalg.svd(V, full_matrices=False)
+U3 = np.matmul(U3, np.diag(np.sqrt(S)))
+V = np.matmul(np.diag(np.sqrt(S)), V)
+
+print(np.round(U3, decimals=12))
+print()
+print(np.round(V, decimals=12))
+
+print(np.shape(U1))
+print(np.shape(U2))
+print(np.shape(U3))
+print(np.shape(V))
+
+
+
+newchi=20
+wow = np.zeros((4, newchi, newchi))
 
 
 

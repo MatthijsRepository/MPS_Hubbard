@@ -343,7 +343,7 @@ class MPS:
             st2 = np.tensordot(temp_gammas[j,:,:,:],np.diag(temp_lambdas[j+1,:]), axes=(2,0)) #(d, chi, chi)
             mp = np.tensordot(np.conj(st1), st2, axes=(0,0)) #(chi, chi, chi, chi)    
             m_total = np.tensordot(m_total,mp,axes=([0,1],[0,2]))    
-        return abs(m_total[0,0])
+        return np.real(m_total[0,0])
     
     def calculate_norm(self):
         """ Calculates the norm of the MPS """
@@ -370,8 +370,7 @@ class MPS:
         if track_energy:
             energy = np.zeros(steps)
         if (track_current==True and Diss_bool==True):
-            if steps>current_cutoff:
-                spin_current_values = np.zeros(steps-current_cutoff)
+            spin_current_values = np.zeros(steps)
         
         exp_values = np.ones((len(desired_expectations), self.N, steps)) #array to store expectation values in
                     
@@ -398,9 +397,8 @@ class MPS:
             if track_energy:
                 energy[t] = self.calculate_energy(TimeEvol_obj)
             if (track_current==True and Diss_bool==True):
-                if t>=current_cutoff:
-                    middle_site = int(np.round(self.N/2-1))
-                    spin_current_values[t-current_cutoff] = self.flipped_factor[middle_site] * self.flipped_factor[middle_site+1] * np.real( self.expval_twosite(spin_current_op, middle_site) )
+                middle_site = int(np.round(self.N/2-1))
+                spin_current_values[t] = self.flipped_factor[middle_site] * self.flipped_factor[middle_site+1] * np.real( self.expval_twosite(spin_current_op, middle_site) )
             """              
             for i in range(len(desired_expectations)):
                 if desired_expectations[i][2] == True:
@@ -788,8 +786,8 @@ Sz = np.array([[1,0],[0,-1]])
 
 
 #### Spin current operator and cutoff factor
-cutoff_factor = 0.1
-current_cutoff=round(steps * cutoff_factor) 
+#cutoff_factor = 0.1
+#current_cutoff=round(steps * cutoff_factor) 
 spin_current_op = 2 * ( np.kron( np.kron(Sx, np.eye(d)) , np.kron(Sy, np.eye(d))) - np.kron( np.kron(Sy, np.eye(d)) , np.kron(Sx, np.eye(d))) )
 #equivalent operator in terms of Sp and Sm
 #spin_current_op = 2*1j* ( np.kron( np.kron(Sp, np.eye(d)) , np.kron(Sm, np.eye(d))) - np.kron( np.kron(Sm, np.eye(d)) , np.kron(Sp, np.eye(d))) )

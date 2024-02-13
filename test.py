@@ -353,7 +353,7 @@ class MPS:
         #"""
         #NOTE:  for singlesite expectations the expectation <<p |A| p>> matches the result for pure state evolutions
         #        hence that specific expectation should be used
-        if 1==2: #self.is_density:     #In case of density matrices we must take the trace  
+        if self.is_density:     #In case of density matrices we must take the trace  
             return np.real(np.tensordot(theta_prime, NORM_state.singlesite_thetas, axes=([0,1,2],[2,1,0])))
         else:
             return np.real(np.tensordot(theta_prime, np.conj(theta), axes=([0,1,2],[0,1,2])))
@@ -392,7 +392,7 @@ class MPS:
             st2 = np.tensordot(temp_gammas[j,:,:,:],np.diag(temp_lambdas[j+1,:]), axes=(2,0)) #(d, chi, chi)
             mp = np.tensordot(np.conj(st1), st2, axes=(0,0)) #(chi, chi, chi, chi)    
             m_total = np.tensordot(m_total,mp,axes=([0,1],[0,2]))    
-        return abs(m_total[0,0])
+        return np.real(m_total[0,0])
     
     def calculate_norm(self):
         """ Calculates the norm of the MPS """
@@ -771,7 +771,7 @@ def calculate_thetas_twosite(state):
 ####################################################################################
 t0 = time.time()
 #### Simulation variables
-N=3
+N=4
 d=2
 chi=10      #MPS truncation parameter
 newchi=20   #DENS truncation parameter
@@ -850,7 +850,7 @@ def main():
         #MPS1.set_Gamma_singlesite(0, temp)
         
         DENS1 = create_superket(MPS1, newchi)
-    """    
+    #"""    
     DENS1.Gamma_mat[:] *= 0
     DENS1.Gamma_mat[0,0,0,0] = 3/4 
     DENS1.Gamma_mat[0,1,0,0] = 1/4 
@@ -866,10 +866,79 @@ def main():
     DENS1.Gamma_mat[2,1,0,0] = 1/4 
     DENS1.Gamma_mat[2,2,0,0] = 1/4 
     DENS1.Gamma_mat[2,3,0,0] = 3/4
+    
+    DENS1.Gamma_mat[3,0,0,0] = 1/2 
+    DENS1.Gamma_mat[3,1,0,0] = 1/2 
+    DENS1.Gamma_mat[3,2,0,0] = 1/2 
+    DENS1.Gamma_mat[3,3,0,0] = 1/2 
+    #"""
+    #DENS1.Gamma_mat *= 0
+    
+    #c = DENS1.contract(0,2)
+    
+    
+    normDENS = create_superket(MPS1, newchi)
+    normDENS.Gamma_mat *=0
+    #normDENS.Lambda_mat *=0
+    
+    test_theta = np.zeros((newchi, newchi, 4, 4, 4, 4), dtype=complex)
+    #temp = np.load("C:\\Users\\matth\\OneDrive\\Documents\\TUDelft\\MEP\\code\\MPS_Hubbard\\I_twosite.npy")
+    temp = np.eye(2**4, 2**4).reshape((2,2,2,2, 2,2,2,2))
+    temp = temp.transpose((0,4, 1,5, 2,6, 3,7))
+    temp = temp.reshape((4,4,4,4))
+    test_theta[0,0] = temp
+    
+    normDENS.decompose_contraction(test_theta, 0)
+    """
+    print(normDENS.Gamma_mat[0,0,0,:5])
+    print(normDENS.Gamma_mat[0,1,0,:5])
+    print(normDENS.Gamma_mat[0,2,0,:5])
+    print(normDENS.Gamma_mat[0,3,0,:5])
+    print(normDENS.Lambda_mat[1,:3])
+    print()
+    print(normDENS.Gamma_mat[1,0,:5,:5])
+    print(normDENS.Gamma_mat[1,1,:5,:5])
+    print(normDENS.Gamma_mat[1,2,:5,:5])
+    print(normDENS.Gamma_mat[1,3,:5,:5])
+    print(normDENS.Lambda_mat[2,:3])
+    print()
+    print(normDENS.Gamma_mat[2,0,:5,:5])
+    print(normDENS.Gamma_mat[2,1,:5,:5])
+    print(normDENS.Gamma_mat[2,2,:5,:5])
+    print(normDENS.Gamma_mat[2,3,:5,:5])
+    print(normDENS.Lambda_mat[3,:3])
+    print()
+    print(normDENS.Gamma_mat[3,0,:5,0])
+    print(normDENS.Gamma_mat[3,1,:5,0])
+    print(normDENS.Gamma_mat[3,2,:5,0])
+    print(normDENS.Gamma_mat[3,3,:5,0])
     #"""
     
-    test_theta = np.zeros((newchi, newchi, 4, 4, 4), dtype=complex)
-    #test_theta[0,0,]
+
+    #test_norm_theta = np.tensordot(np.diag(normDENS.Lambda_mat[2]), normDENS.Gamma_mat[2], axes=(1,2))
+    #test_norm_theta = np.tensordot(test_norm_theta, np.diag(normDENS.Lambda_mat[3]), axes=(-1,0))
+    #test_norm_theta = test_norm_theta.transpose(1,0,2)
+    #print(test_norm_theta[0,:5,:5])
+    #print(test_norm_theta[1,:5,:5])
+    #print(test_norm_theta[2,:5,:5])
+    #print(test_norm_theta[3,:5,:5])
+    
+    #theta = DENS1.contract(2,2) #(chi, chi, d)
+    #theta_prime = np.tensordot(theta, np.kron(Sz, np.eye(d)), axes=(2,1)) #(chi, chi, d)
+    #expvalue = np.real(np.tensordot(theta_prime, test_norm_theta, axes=([0,1,2],[2,1,0])))
+    
+    #print("Expvalue:")
+    #print(expvalue)
+    
+    #DENS1.decompose_contraction(test_theta, 0)
+    #print(DENS1.Gamma_mat[3,0,:1,:5])
+    #print(DENS1.Gamma_mat[1,1,:1,:5])
+    #print(DENS1.Gamma_mat[1,2,:1,:5])
+    #print(DENS1.Gamma_mat[1,3,:1,:5])
+    #print(DENS1.Lambda_mat[3,:5])
+    #print("Here")
+    #print(normDENS.calculate_vidal_inner(DENS1))
+    
     
     #creating time evolution object
     #TimeEvol_obj1 = Time_Operator(N, d, JXY, JZ, h, s_coup, dt, Diss_bool, True, use_CN)
@@ -903,8 +972,8 @@ def main():
     #Ham = np.kron(np.kron(Sz, Sz), np.eye(d**2)) + np.kron(np.kron(Sx, Sx), np.eye(d**2)) + np.kron(np.kron(Sy, Sy), np.eye(d**2))
     #Ham += np.kron(np.eye(d**2), np.kron(Sz,Sz)) + np.kron(np.eye(d**2), np.kron(Sx,Sx)) + np.kron(np.eye(d**2), np.kron(Sy,Sy))
     
-    test_steps = 150
-    test_dt = 0.02
+    test_steps = 1
+    test_dt = 0.5
     t_hopping=1
     
     
@@ -925,7 +994,9 @@ def main():
     
     
     expvals = np.zeros((N, test_steps+1))
-    expvals_Dens = np.zeros((N, test_steps+1))
+    expD_normal = np.zeros((N, test_steps+1))
+    expD_good = np.zeros((N, test_steps+1))
+    expD_inner = np.zeros((N, test_steps+1))
     
     norm_Dens = np.zeros(test_steps)
     
@@ -936,8 +1007,11 @@ def main():
     #theta = DENS1.contract(0,2)
     #DENS1.decompose_contraction(theta, 0)
     
-    a = np.load("C:\\Users\\matth\\OneDrive\\Documents\\TUDelft\\MEP\\code\\MPS_Hubbard\\temp.npy")
-    DENS1.decompose_contraction(a, 0)
+    #a = np.load("C:\\Users\\matth\\OneDrive\\Documents\\TUDelft\\MEP\\code\\MPS_Hubbard\\temp.npy")
+    #DENS1.decompose_contraction(a, 0)
+    #b = DENS1.contract(0,2)
+    #print(a[0,0]-c[0,0])
+
     
     #theta=DENS1.contract(0,2)
     #print(np.shape(theta))
@@ -960,13 +1034,28 @@ def main():
     for j in range(N):
             #final_Sz[i] = DENS1.expval(np.kron(Sz, np.eye(d)), i)# * DENS1.flipped_factor[i]
             expvals[j,0] = MPS1.expval(Sz, j)
-            expvals_Dens[j,0] = DENS1.expval(np.kron(Sz, np.eye(d)), j)
+            expD_normal[j,0] = DENS1.expval(np.kron(Sz, np.eye(d)), j)
+            
+            DENS1.apply_singlesite(np.kron(Sz, np.eye(d)), j, False)
+            #expD_good[j,0] = DENS1.calculate_vidal_inner(normDENS)
+            expD_inner[j,0] = DENS1.calculate_norm()
+            DENS1.apply_singlesite(np.kron(Sz, np.eye(d)), j, False)
             #expvals[j,0] = DENS1.expval(np.kron(Sz, np.eye(d)),j)
     
     for t in range(test_steps):
         if (t%500==0):
             print(t)
+        """    
+        if t%10==0:
+            print("Here!")
+            print(DENS1.expval(np.kron(Sz, np.eye(d)), 0))
+            DENS1.apply_singlesite(np.kron(Sz, np.eye(d)), 0, False)
+            print(DENS1.calculate_vidal_inner(normDENS))
+            DENS1.apply_singlesite(np.kron(Sz, np.eye(d)), 0, False)
+            print()
+        #"""
             
+        
         norm_Dens[t] = DENS1.calculate_norm()
         #MPS1.apply_foursite(OPP,0, False)
         #MPS1.apply_foursite(OPP,4, False)
@@ -976,11 +1065,11 @@ def main():
             MPS1.apply_foursite_swap(OPP, j, normalize)
             DENS1.apply_foursite_swap(OPP_Dens, j, normalize)
         
-        #"""
+        """
         if (t>=1):
-            expvals_Dens[:,t] *= DENS1.flipped_factor
-            sign_flips = DENS1.sign_flip_check(expvals_Dens[:,t-1:t+1].copy())
-            expvals_Dens[sign_flips,t] *= -1
+            expD_normal[:,t] *= DENS1.flipped_factor
+            sign_flips = DENS1.sign_flip_check(expD_normal[:,t-1:t+1].copy())
+            expD_normal[sign_flips,t] *= -1
         #"""
 
         
@@ -992,7 +1081,12 @@ def main():
         for j in range(N):
             #final_Sz[i] = DENS1.expval(np.kron(Sz, np.eye(d)), i)# * DENS1.flipped_factor[i]
             expvals[j,t+1] = MPS1.expval(Sz, j)
-            expvals_Dens[j,t+1] = DENS1.expval(np.kron(Sz, np.eye(d)), j)
+            #expD_normal[j,t+1] = DENS1.expval(np.kron(Sz, np.eye(d)), j)
+            
+            DENS1.apply_singlesite(np.kron(Sz, np.eye(d)), j, False)
+            #expD_good[j,t+1] = DENS1.calculate_vidal_inner(normDENS)
+            expD_inner[j,t+1] = DENS1.calculate_norm()
+            DENS1.apply_singlesite(np.kron(Sz, np.eye(d)), j, False)
             #expvals[j,i+1] = DENS1.expval(np.kron(Sz, np.eye(d)),j)
     
     
@@ -1017,7 +1111,9 @@ def main():
     #"""
     
     for j in range(N):
-        plt.plot(x_axis, expvals_Dens[j], label=f"Site {j}")
+        #plt.plot(x_axis, expD_normal[j], label=f"Site {j}")
+        #plt.plot(x_axis, expD_good[j])
+        plt.plot(x_axis, expD_inner[j])
     plt.xlabel("Time")
     plt.ylabel("<Sz>")
     plt.ylim((-1.05, 1.05))
@@ -1026,15 +1122,23 @@ def main():
     plt.grid()
     plt.show()
     
+    """
+    for j in range(N):
+        plt.plot(x_axis, expD_good[j]-expD_inner[j], label=f"Site {j}")
+    plt.grid()
+    plt.legend()
+    plt.show()
+    #"""
+    
     print(norm_Dens[-1])
     
-    
+    #np.save("C:\\Users\\matth\\OneDrive\\Documents\\TUDelft\\MEP\\code\\MPS_Hubbard\\expvals_hope_good.npy", expD_good)
         
     #print(expvals[1,0]-expvals[1,75])
-    #print(expvals_Dens[1,0]-expvals_Dens[1,75])
+    #print(expD_normal[1,0]-expD_normal[1,75])
     #print()
     #print(temp-expvals[1,75])
-    #print(temp-expvals_Dens[1,75])
+    #print(temp-expD_normal[1,75])
     
     
     """
