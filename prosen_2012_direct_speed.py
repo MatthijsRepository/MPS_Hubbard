@@ -225,16 +225,7 @@ class MPS:
             theta = self.contract(site,site) #(chi, chi, d)
             theta_prime = np.tensordot(theta, Op, axes=(2,1)) #(chi, chi, d)
             return np.real(np.tensordot(theta_prime, np.conj(theta), axes=([0,1,2],[0,1,2])))
-    
-    def calc_vidal_inner_partial(self, MPS2, site):
-        m_total = np.eye(self.chi)
-        for j in range(site, self.N):
-            st1 = np.tensordot(self.Gamma_mat[j,:,:,:],np.diag(self.Lambda_mat[j+1,:]), axes=(2,0)) #(d, chi, chi)
-            st2 = np.tensordot(MPS2.Gamma_mat[j,:,:,:],np.diag(MPS2.Lambda_mat[j+1,:]), axes=(2,0)) #(d, chi, chi)
-            mp = np.tensordot(np.conj(st1), st2, axes=(0,0)) #(chi, chi, chi, chi)    
-            m_total = np.tensordot(m_total,mp,axes=([0,1],[0,2]))    
-        return m_total
-        
+            
         
     def expval_chain(self, Op):
         """ Calculates expectation values from the left side, by reusing the already
@@ -260,7 +251,17 @@ class MPS:
             Left_overlap = np.tensordot(Left_overlap, temp, axes=([0,1],[0,2]))
         norm = np.real(Left_overlap[0,0])
         return expvals, norm
-        
+      
+    
+    def calculate_vidal_inner_fast(self, MPS2):
+        m_total = np.eye(self.chi)
+        temp_gammas, temp_lambdas = MPS2.Gamma_mat, MPS2.Lambda_mat  #retrieve gammas and lambdas of MPS2
+        for j in range(0, self.N):
+            st1 = np.tensordot(self.Gamma_mat[j,:,:,:],np.diag(self.Lambda_mat[j+1,:]), axes=(2,0)) #(d, chi, chi)
+            st2 = np.tensordot(temp_gammas[j,:,:,:],np.diag(temp_lambdas[j+1,:]), axes=(2,0)) #(d, chi, chi)
+            m_total = np.tensordot(m_total, np.conj(st1), axes=(0,1)) #(chi, d, chi)
+            m_total = np.tensordot(m_total, st2, axes=([1,0],[0,1]))
+        return np.real(m_total[0,0])
         
     def calculate_vidal_inner(self, MPS2):
         """ Calculates the inner product of the MPS with another MPS """
@@ -335,8 +336,15 @@ class MPS:
         test = np.zeros(self.N)
         for i in range(self.N):
             test[i] = self.expval(Sz_exp_op, i)
-        print(test)
-        print(self.calculate_norm())
+        
+        time1 = time.time()
+        for i in range(400):
+            self.calculate_vidal_inner(NORM_state)
+        print(time.time()-time1)
+        time2 = time.time()
+        for i in range(400):
+            self.calculate_vidal_inner_fast(NORM_state)
+        print(time.time()-time2)
 
         
         #### Plotting expectation values
@@ -585,7 +593,7 @@ newchi=25   #DENS truncation parameter
 
 #im_steps = 0
 #im_dt = -0.03j
-steps=500
+steps=40
 dt = 0.02
 
 normalize = False
@@ -653,10 +661,7 @@ def main():
     #MPS1.time_evolution(TimeEvol_obj_MPS, normalize, steps, True)
     ####################################################### ^BOOL^: whether to track normalization    
     expvals, norm = DENS1.expval_chain(np.kron(Sz, np.eye(2)))
-    #print("Here")
-    #print()
-    #print(expvals)
-    #print(norm)
+
     
     
 
