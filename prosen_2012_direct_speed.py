@@ -227,7 +227,7 @@ class MPS:
             return np.real(np.tensordot(theta_prime, np.conj(theta), axes=([0,1,2],[0,1,2])))
             
         
-    def expval_chain(self, Op):
+    def expval_chain_old(self, Op):
         """ Calculates expectation values from the left side, by reusing the already
             contracted part left of the site we want to know our expectation value of
             after completing calculation, also immediately returns the normalization of the state """
@@ -251,6 +251,31 @@ class MPS:
             Left_overlap = np.tensordot(Left_overlap, temp, axes=([0,1],[0,2]))
         norm = np.real(Left_overlap[0,0])
         return expvals, norm
+    
+    def expval_chain(self, Op):
+        """ Calculates expectation values from the left side, by reusing the already
+            contracted part left of the site we want to know our expectation value of
+            after completing calculation, also immediately returns the normalization of the state """
+        expvals = np.zeros(self.N)
+        Left_overlap = np.eye(self.chi)
+        
+        for i in range(N):
+            self.apply_singlesite(Op, i, False)
+            st1 = np.tensordot(self.Gamma_mat[i,:,:,:],np.diag(self.Lambda_mat[i+1,:]), axes=(2,0)) #(d, chi, chi)
+            sub_expval = np.tensordot(Left_overlap, np.conj(st1), axes=(0,1)) #(chi, d, chi)
+            sub_expval = np.tensordot(sub_expval, NORM_state.singlesite_thetas, axes=([1,0],[0,1])) #(chi, chi)
+            for j in range(i+1, self.N):
+                temp = np.tensordot(self.Gamma_mat[j,:,:,:],np.diag(self.Lambda_mat[j+1,:]), axes=(2,0)) #(d, chi, chi)
+                sub_expval = np.tensordot(sub_expval, np.conj(temp), axes=(0,1)) #(chi, d, chi)
+                sub_expval = np.tensordot(sub_expval, NORM_state.singlesite_thetas, axes=([1,0],[0,1])) #(chi, chi)
+            expvals[i] = np.real(sub_expval[0,0])
+            self.apply_singlesite(Op, i, False)
+            
+            st1 = np.tensordot(self.Gamma_mat[i,:,:,:],np.diag(self.Lambda_mat[i+1,:]), axes=(2,0)) #(d, chi, chi)
+            Left_overlap = np.tensordot(Left_overlap, np.conj(st1), axes=(0,1)) #(chi, d, chi)
+            Left_overlap = np.tensordot(Left_overlap, NORM_state.singlesite_thetas, axes=([1,0],[0,1])) #(chi, chi)
+        norm = np.real(Left_overlap[0,0])
+        return expvals, norm
       
     
     def calculate_vidal_inner_fast(self, MPS2):
@@ -260,7 +285,7 @@ class MPS:
             st1 = np.tensordot(self.Gamma_mat[j,:,:,:],np.diag(self.Lambda_mat[j+1,:]), axes=(2,0)) #(d, chi, chi)
             st2 = np.tensordot(temp_gammas[j,:,:,:],np.diag(temp_lambdas[j+1,:]), axes=(2,0)) #(d, chi, chi)
             m_total = np.tensordot(m_total, np.conj(st1), axes=(0,1)) #(chi, d, chi)
-            m_total = np.tensordot(m_total, st2, axes=([1,0],[0,1]))
+            m_total = np.tensordot(m_total, st2, axes=([1,0],[0,1])) #(chi, chi)
         return np.real(m_total[0,0])
         
     def calculate_vidal_inner(self, MPS2):
@@ -338,12 +363,12 @@ class MPS:
             test[i] = self.expval(Sz_exp_op, i)
         
         time1 = time.time()
-        for i in range(400):
-            self.calculate_vidal_inner(NORM_state)
+        for i in range(100):
+            self.expval_chain_old(Sz_exp_op)
         print(time.time()-time1)
         time2 = time.time()
-        for i in range(400):
-            self.calculate_vidal_inner_fast(NORM_state)
+        for i in range(100):
+            self.expval_chain(Sz_exp_op)
         print(time.time()-time2)
 
         
