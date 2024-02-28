@@ -226,32 +226,7 @@ class MPS:
             theta_prime = np.tensordot(theta, Op, axes=(2,1)) #(chi, chi, d)
             return np.real(np.tensordot(theta_prime, np.conj(theta), axes=([0,1,2],[0,1,2])))
             
-        
-    def expval_chain_old(self, Op):
-        """ Calculates expectation values from the left side, by reusing the already
-            contracted part left of the site we want to know our expectation value of
-            after completing calculation, also immediately returns the normalization of the state """
-        expvals = np.zeros(self.N)
-        Left_overlap = np.eye(self.chi)
-        
-        for i in range(N):
-            self.apply_singlesite(Op, i, False)
-            st1 = np.tensordot(self.Gamma_mat[i,:,:,:],np.diag(self.Lambda_mat[i+1,:]), axes=(2,0)) #(d, chi, chi)
-            sub_expval = np.tensordot(np.conj(st1), NORM_state.singlesite_thetas, axes=(0,0)) #(chi, chi, chi, chi)
-            sub_expval = np.tensordot(Left_overlap, sub_expval, axes=([0,1] ,[0,2]))
-            for j in range(i+1, self.N):
-                temp = np.tensordot(self.Gamma_mat[j,:,:,:],np.diag(self.Lambda_mat[j+1,:]), axes=(2,0)) #(d, chi, chi)
-                temp = np.tensordot(np.conj(temp), NORM_state.singlesite_thetas, axes=(0,0)) #(chi, chi, chi, chi)
-                sub_expval = np.tensordot(sub_expval, temp, axes=([0,1] ,[0,2]))   
-            expvals[i] = np.real(sub_expval[0,0])
-            self.apply_singlesite(Op, i, False)
             
-            st1 = np.tensordot(self.Gamma_mat[i,:,:,:],np.diag(self.Lambda_mat[i+1,:]), axes=(2,0))
-            temp = np.tensordot(np.conj(st1), NORM_state.singlesite_thetas, axes=(0,0)) #(chi, chi, chi, chi)
-            Left_overlap = np.tensordot(Left_overlap, temp, axes=([0,1],[0,2]))
-        norm = np.real(Left_overlap[0,0])
-        return expvals, norm
-    
     def expval_chain(self, Op):
         """ Calculates expectation values from the left side, by reusing the already
             contracted part left of the site we want to know our expectation value of
@@ -276,17 +251,7 @@ class MPS:
             Left_overlap = np.tensordot(Left_overlap, NORM_state.singlesite_thetas, axes=([1,0],[0,1])) #(chi, chi)
         norm = np.real(Left_overlap[0,0])
         return expvals, norm
-      
-    
-    def calculate_vidal_inner_fast(self, MPS2):
-        m_total = np.eye(self.chi)
-        temp_gammas, temp_lambdas = MPS2.Gamma_mat, MPS2.Lambda_mat  #retrieve gammas and lambdas of MPS2
-        for j in range(0, self.N):
-            st1 = np.tensordot(self.Gamma_mat[j,:,:,:],np.diag(self.Lambda_mat[j+1,:]), axes=(2,0)) #(d, chi, chi)
-            st2 = np.tensordot(temp_gammas[j,:,:,:],np.diag(temp_lambdas[j+1,:]), axes=(2,0)) #(d, chi, chi)
-            m_total = np.tensordot(m_total, np.conj(st1), axes=(0,1)) #(chi, d, chi)
-            m_total = np.tensordot(m_total, st2, axes=([1,0],[0,1])) #(chi, chi)
-        return np.real(m_total[0,0])
+       
         
     def calculate_vidal_inner(self, MPS2):
         """ Calculates the inner product of the MPS with another MPS """
@@ -295,8 +260,8 @@ class MPS:
         for j in range(0, self.N):
             st1 = np.tensordot(self.Gamma_mat[j,:,:,:],np.diag(self.Lambda_mat[j+1,:]), axes=(2,0)) #(d, chi, chi)
             st2 = np.tensordot(temp_gammas[j,:,:,:],np.diag(temp_lambdas[j+1,:]), axes=(2,0)) #(d, chi, chi)
-            mp = np.tensordot(np.conj(st1), st2, axes=(0,0)) #(chi, chi, chi, chi)    
-            m_total = np.tensordot(m_total,mp,axes=([0,1],[0,2]))    
+            m_total = np.tensordot(m_total, np.conj(st1), axes=(0,1)) #(chi, d, chi)
+            m_total = np.tensordot(m_total, st2, axes=([1,0],[0,1])) #(chi, chi)
         return np.real(m_total[0,0])
     
     def calculate_norm(self):
@@ -357,21 +322,7 @@ class MPS:
                 
             self.TEBD(TimeOp_leg, TimeOp_rung, Diss_arr, normalize, Diss_bool)
             #self.TEBD_3_sets(TimeOp_leg, TimeOp_rung, Diss_arr, normalize, Diss_bool)
-        
-        test = np.zeros(self.N)
-        for i in range(self.N):
-            test[i] = self.expval(Sz_exp_op, i)
-        
-        time1 = time.time()
-        for i in range(100):
-            self.expval_chain_old(Sz_exp_op)
-        print(time.time()-time1)
-        time2 = time.time()
-        for i in range(100):
-            self.expval_chain(Sz_exp_op)
-        print(time.time()-time2)
-
-        
+                
         #### Plotting expectation values
         time_axis = np.arange(steps)*abs(TimeEvol_obj.dt)
         
