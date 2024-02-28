@@ -267,10 +267,38 @@ class MPS:
         self.decompose_contraction(theta, i+1)
         return 
      
-    def TEBD(self, TimeOp, Diss_arr, normalize, Diss_bool):
+    def TEBD(self, TimeOp_leg, TimeOp_rung, Diss_arr, normalize, Diss_bool):
         """ TEBD algorithm """
         for i in range(0, self.N-3, 4):
-            self.apply_foursite_swap(TimeOp, i, normalize)
+            # Apply swap (2,3) -> (3,2)
+            theta = self.contract(i+1,i+2)
+            theta = theta.transpose(0,1,3,2)
+            self.decompose_contraction(theta, i+1)
+            
+            self.apply_twosite(TimeOp_leg, i, normalize)
+            self.apply_twosite(TimeOp_leg, i+2, normalize)
+            
+            # Apply swap (3,2) -> (2,3)
+            theta = self.contract(i+1,i+2)
+            theta = theta.transpose(0,1,3,2)
+            self.decompose_contraction(theta, i+1)
+        
+        for i in range(2, self.N-3, 4):
+            theta = self.contract(i+1,i+2)
+            theta = theta.transpose(0,1,3,2)
+            self.decompose_contraction(theta, i+1)
+            
+            self.apply_twosite(TimeOp_leg, i, normalize)
+            self.apply_twosite(TimeOp_leg, i+2, normalize)
+            
+            # Apply swap (3,2) -> (2,3)
+            theta = self.contract(i+1,i+2)
+            theta = theta.transpose(0,1,3,2)
+            self.decompose_contraction(theta, i+1)
+        
+        
+        #for i in range(0, self.N-3, 4):
+        #    self.apply_foursite_swap(TimeOp_leg, i, normalize)
         #for i in range(2, self.N-3, 4):
         #    self.apply_foursite_swap(TimeOp, i, normalize)
         
@@ -296,7 +324,11 @@ class MPS:
         #NOTE:  for singlesite expectations the expectation <<p |A| p>> matches the result for pure state evolutions
         #        hence that specific expectation should be used
         if self.is_density:     #In case of density matrices we must take the trace  
-            return np.real(np.tensordot(theta_prime, NORM_state.singlesite_thetas, axes=([0,1,2],[2,1,0])))
+            self.apply_singlesite(Op, site, False)
+            a = self.calculate_vidal_inner(NORM_state)
+            self.apply_singlesite(Op, site, False)
+            return a    
+            #return np.real(np.tensordot(theta_prime, NORM_state.singlesite_thetas, axes=([0,1,2],[2,1,0])))
         else:
             return np.real(np.tensordot(theta_prime, np.conj(theta), axes=([0,1,2],[0,1,2])))
     
@@ -359,7 +391,8 @@ class MPS:
         
         #### Initializing operators and expectation value arrays
         
-        TimeOp = TimeEvol_obj.TimeOp
+        TimeOp_leg = TimeEvol_obj.TimeOp_leg
+        TimeOp_rung = TimeEvol_obj.TimeOp_rung
         Diss_arr = TimeEvol_obj.Diss_arr
         Diss_bool = TimeEvol_obj.Diss_bool
         
@@ -407,7 +440,7 @@ class MPS:
                     exp_values[i,:,t] *= self.expval_chain(desired_expectations[i][1])
             """
                
-            self.TEBD(TimeOp, Diss_arr, normalize, Diss_bool)
+            self.TEBD(TimeOp_leg, TimeOp_rung, Diss_arr, normalize, Diss_bool)
 
         
         #### Plotting expectation values
@@ -511,12 +544,13 @@ class Time_Operator:
         #### Creating Hamiltonian and Time operators
         #### Note: Ham_energy is the Hamiltonian to be used for energy calculation
         if self.is_density:
-            self.Ham, self.Ham_energy = self.Create_Dens_Ham()
+            self.Ham_rung, self.Ham_leg = self.Create_Dens_Ham()
+            self.Ham_energy = None
         else:
             self.Ham = self.Create_Ham()
             self.Ham_energy = self.Ham
         
-        self.TimeOp = self.Create_TimeOp(self.dt, self.use_CN)
+        self.TimeOp_rung, self.TimeOp_leg = self.Create_TimeOp(self.dt, self.use_CN)
         
         if (self.is_density and self.Diss_bool):
             self.Diss_arr = self.Create_Diss_Array(self.s_coup)
@@ -553,17 +587,17 @@ class Time_Operator:
         Identity = np.eye(self.d**2)
          
         """ Calculates (H otimes I) - (I otimes H)* """
-        H_arr = np.ones((2, self.d**4, self.d**4), dtype=complex)
+        H_arr_rung = np.ones((2, self.d**4, self.d**4), dtype=complex)
+        H_arr_leg = np.ones((2, self.d**4, self.d**4), dtype=complex)
         for i in range(2):
             #SX = np.kron(np.kron(Sx_arr[i], Identity), Sx_arr[i])
             #SY = np.kron(np.kron(Sy_arr[i], Identity), Sy_arr[i])
             #SZ = np.kron(np.kron(Sz_arr[i], Identity), Sz_arr[i])
             
-            H = np.kron(Sy_arr[i], Sy_arr[i])
-            H += np.kron(Sx_arr[i], Sx_arr[i])
-            #H += np.kron(Sz_arr[i], Sz_arr[i])
+            H_arr_leg[i] = -self.t_hopping/2 * ( np.kron(Sx_arr[i], Sx_arr[i]) + np.kron(Sy_arr[i], Sy_arr[i]) )
+            H_arr_rung[i] = self.U_coulomb/4 * np.kron(Sz_arr[i]+Identity, Sz_arr[i]+Identity)
             
-            H_arr[i] *= H
+
             """
             #Sigma x and y hopping connections
             H = -self.t_hopping/2 * np.kron(SX, Identity) + np.kron(SY, Identity)
@@ -576,29 +610,33 @@ class Time_Operator:
             H_arr[i] *= H
             """
         #Note: H_arr[0] is the correct Hamiltonian to use for energy calculations
-        return (H_arr[0] - np.conj(H_arr[1])), H_arr[0]     
+        return (H_arr_leg[0] - np.conj(H_arr_leg[1])), (H_arr_rung[0] - np.conj(H_arr_leg[1]))     
 
     def Create_TimeOp(self, dt, use_CN):
         if self.is_density:
-            U = np.ones((self.N-1, self.d**4, self.d**4), dtype=complex)
+            U_leg = np.ones((self.N-1, self.d**4, self.d**4), dtype=complex)
+            U_rung = np.ones((self.N-1, self.d**4, self.d**4), dtype=complex)
         else:
             U = np.ones((self.N-1, self.d**2, self.d**2), dtype=complex)
         
         if use_CN:
-            U = self.create_crank_nicolson(self.Ham, dt)
+            U_leg = self.create_crank_nicolson(self.Ham_leg, dt)
+            U_rung = self.create_crank_nicolson(self.Ham_rung, dt)
             #U[0,:,:] = self.create_crank_nicolson(self.Ham[0], dt)
             #U[self.N-2,:,:] = self.create_crank_nicolson(self.Ham[self.N-2], dt)
             #U[1:self.N-2,:,:] *= self.create_crank_nicolson(self.Ham[1], dt) # we use broadcasting
         else:
-            U = expm(-1j*dt*self.Ham)
+            U_leg = expm(-1j*dt*self.Ham_leg)
+            U_rung = expm(-1j*dt*self.Ham_rung)
             #U[0,:,:] = expm(-1j*dt*self.Ham[0])
             #U[self.N-2,:,:] = expm(-1j*dt*self.Ham[self.N-2])
             #U[1:self.N-2,:,:] *= expm(-1j*dt*self.Ham[1]) # we use broadcasting
     
-        U = np.around(U, decimals=15)        #Rounding out very low decimals 
+        U_leg = np.around(U_leg, decimals=15)        #Rounding out very low decimals 
+        U_rung = np.around(U_rung, decimals=15)        #Rounding out very low decimals 
         if self.is_density:
             #return np.reshape(U, (self.d**2,self.d**2,self.d**2,self.d**2, self.d**2, self.d**2, self.d**2, self.d**2))
-            return U
+            return U_leg, U_rung
         else:
             #return np.reshape(U, (self.d**2,self.d**2,self.d**2,self.d**2, self.d**2, self.d**2, self.d**2, self.d**2)) 
             return U

@@ -230,7 +230,7 @@ class MPS:
         """ Calculates the inner product of the MPS with another MPS """
         m_total = np.eye(self.chi)
         temp_gammas, temp_lambdas = MPS2.Gamma_mat, MPS2.Lambda_mat  #retrieve gammas and lambdas of MPS2
-        for j in range(0, self.N):        
+        for j in range(0, self.N):
             st1 = np.tensordot(self.Gamma_mat[j,:,:,:],np.diag(self.Lambda_mat[j+1,:]), axes=(2,0)) #(d, chi, chi)
             st2 = np.tensordot(temp_gammas[j,:,:,:],np.diag(temp_lambdas[j+1,:]), axes=(2,0)) #(d, chi, chi)
             mp = np.tensordot(np.conj(st1), st2, axes=(0,0)) #(chi, chi, chi, chi)    
@@ -534,8 +534,8 @@ t0 = time.time()
 #### Simulation variables
 N=8
 d=2
-chi=20     #MPS truncation parameter
-newchi=25   #DENS truncation parameter
+chi=20      #MPS truncation parameter
+newchi=20   #DENS truncation parameter
 
 #im_steps = 0
 #im_dt = -0.03j

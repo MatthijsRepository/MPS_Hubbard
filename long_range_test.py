@@ -205,7 +205,6 @@ class MPS:
     def apply_twosite(self, TimeOp, i, normalize):
         """ Applies a two-site operator to sites i and i+1 """
         theta = self.contract(i,i+1) #(chi, chi, d, d)
-        #operator is applied, tensor is reshaped
         theta = theta.reshape(self.chi, self.chi, self.d**2)
 
         theta_prime = np.tensordot(theta, TimeOp, axes=(2,1))
@@ -773,7 +772,7 @@ t0 = time.time()
 #### Simulation variables
 N=8
 d=2
-chi=10      #MPS truncation parameter
+chi=20      #MPS truncation parameter
 newchi=20   #DENS truncation parameter
 
 im_steps = 0
@@ -885,14 +884,15 @@ def main():
     
     t_hopping=1
     
-    
+
     
     Ham_two = np.kron(Sx,Sx) + np.kron(Sy,Sy) #+ np.kron(Sz,Sz)
     Ham_two *= -t_hopping/2
     
-    test_steps = 2000
+    test_steps = 200 
     test_dt = 0.02
     expvals = np.zeros((N, test_steps+1))
+    norm_data = np.zeros(test_steps)
     
     OPP = expm(-1j*test_dt*Ham_two)
     
@@ -908,14 +908,72 @@ def main():
     for i in range(test_steps):
         if (i%500==0):
             print(i)
-        #MPS1.apply_foursite(OPP,0, False)
-        #MPS1.apply_foursite(OPP,4, False)
-        #MPS1.apply_foursite(OPP,2, False)
         
+        
+        for b in range(0,N-3,4):
+            theta = MPS1.contract(b+1,b+2)
+            theta = theta.transpose(0,1,3,2)
+            MPS1.decompose_contraction(theta, b+1)
+            
+            #Apply operators to bonds (1,3) and (2,4)
+            MPS1.apply_twosite(OPP, b, normalize)
+            MPS1.apply_twosite(OPP, b+2, normalize)
+    
+            # Apply swap (3,2) -> (2,3)
+            theta = MPS1.contract(b+1,b+2)
+            theta = theta.transpose(0,1,3,2)
+            MPS1.decompose_contraction(theta, b+1)
+        
+        for b in range(2,N-3,4):
+            theta = MPS1.contract(b+1,b+2)
+            theta = theta.transpose(0,1,3,2)
+            MPS1.decompose_contraction(theta, b+1)
+            
+            #Apply operators to bonds (1,3) and (2,4)
+            MPS1.apply_twosite(OPP, b, normalize)
+            MPS1.apply_twosite(OPP, b+2, normalize)
+    
+            # Apply swap (3,2) -> (2,3)
+            theta = MPS1.contract(b+1,b+2)
+            theta = theta.transpose(0,1,3,2)
+            MPS1.decompose_contraction(theta, b+1)
+        
+        """
+        for a in range(0,3,1):
+            for b in range(a, N-2,3):
+                theta = MPS1.contract(b+1,b+2)
+                theta = theta.transpose(0,1,3,2)
+                MPS1.decompose_contraction(theta, b+1)
+                
+                #Apply operators to bonds (1,3) and (2,4)
+                MPS1.apply_twosite(OPP, b, normalize)
+        
+                # Apply swap (3,2) -> (2,3)
+                theta = MPS1.contract(b+1,b+2)
+                theta = theta.transpose(0,1,3,2)
+                MPS1.decompose_contraction(theta, b+1)
+        #"""
+        
+        """
+        print()
         for j in range(0,N-3,4):
+            print(j)
             MPS1.apply_foursite_swap(OPP, j, normalize)
+            print(j+2)
+            MPS1.apply_foursite_swap(OPP, j+2, normalize)
+            
+            
+        #for j in range(2,N-2,4):
+        #    MPS1.apply_foursite_swap(OPP, j, normalize)
+        #    print(j)
         for j in range(2,N-3,4):
             MPS1.apply_foursite_swap(OPP, j, normalize)
+            MPS1.apply_foursite_swap(OPP, j+2, normalize)
+            print(j)
+            print(j+2)
+        #for j in range(3,N-3,4):
+        #    MPS1.apply_foursite_swap(OPP, j, normalize)
+        #    print(j)
         
         #MPS1.apply_foursite_swap(OPP_swap,0,False)
 
@@ -926,6 +984,10 @@ def main():
         #DENS1.apply_foursite_swap(OPP,0,normalize)
         #DENS1.apply_foursite_swap(OPP,2,normalize)
         #DENS1.apply_foursite_swap(OPP,4,normalize)
+        """
+        
+        norm_data[i] = MPS1.calculate_norm()
+        
         for j in range(N):
             #final_Sz[i] = DENS1.expval(np.kron(Sz, np.eye(d)), i)# * DENS1.flipped_factor[i]
             expvals[j,i+1] = MPS1.expval(Sz, j)
@@ -941,8 +1003,12 @@ def main():
     plt.legend(bbox_to_anchor=(1.04, 0.5), loc="center left", borderaxespad=0)
     plt.grid()
     plt.show()
+    
+    plt.plot(norm_data)
+    plt.grid()
+    plt.show()
         
-    print(expvals[1,0]-expvals[1,75])
+    #print(expvals[1,0]-expvals[1,75])
     
     
     """
