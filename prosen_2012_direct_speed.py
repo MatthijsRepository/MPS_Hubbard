@@ -26,6 +26,7 @@ class MPS:
         self.is_density = is_density
         if is_density:
             self.name = "DENS"+str(ID)
+            self.trace = np.array([])
         else: 
             self.name = "MPS"+str(ID)
         
@@ -82,19 +83,21 @@ class MPS:
         theta = np.rollaxis(theta, -1, 1) #(chi, chi, d, ..., d)
         return theta
     
-    def decompose_contraction(self, theta, i):
+    def decompose_contraction(self, theta, i, normalize):
         """ decomposes a given theta back into Vidal decomposition. i denotes the leftmost site contracted into theta """
         num_sites = np.ndim(theta)-2 # The number of sites contained in theta
         temp = num_sites-1           # Total number of loops required
         for j in range(temp):
-
             theta = theta.reshape((self.chi, self.chi, self.d, self.d**(temp-j)))
             theta = theta.transpose(2,0,3,1) #(d, chi, d**(temp-j), chi)
             theta = theta.reshape((self.d*self.chi, self.d**(temp-j)*self.chi))
             X, Y, Z = np.linalg.svd(theta); Z = Z.T
             #This can be done more efficiently by leaving out the Z=Z.T and only doing so in case of j==2
             
-            self.Lambda_mat[i+j+1,:] = Y[:self.chi]
+            if normalize==True:
+                self.Lambda_mat[i+j+1,:] = Y[:self.chi] *1/np.linalg.norm(Y[:self.chi])
+            else:
+                self.Lambda_mat[i+j+1,:] = Y[:self.chi]
             
             X = np.reshape(X[:self.d*self.chi, :self.chi], (self.d, self.chi, self.chi))
             inv_lambdas = self.Lambda_mat[i+j, :self.locsize[i+j]].copy()
@@ -113,16 +116,14 @@ class MPS:
             else:
                 theta_prime = theta_prime.transpose(1,2,0)
                 #Here we must contract Lambda with V for the next SVD. The contraction runs over the correct index (the chi resulting from the previous SVD, not the one incorporated with d**(temp-j))
-                theta_prime = np.tensordot(np.diag(Y[:self.chi]), theta_prime, axes=(1,1))
+                theta_prime = np.tensordot(np.diag(Y[:chi]), theta_prime, axes=(1,1))
         return
     
-    def apply_singlesite(self, TimeOp, i, normalize):
+    def apply_singlesite(self, TimeOp, i):
         """ Applies a single-site operator to site i """
         theta = self.contract(i,i)
         theta_prime = np.tensordot(theta, TimeOp, axes=(2,1)) #(chi, chi, d)
-        if normalize:
-            theta_prime = theta_prime / np.linalg.norm(theta_prime)
-        
+
         inv_lambdas  = self.Lambda_mat[i].copy()
         inv_lambdas[np.nonzero(inv_lambdas)] = inv_lambdas[np.nonzero(inv_lambdas)]**(-1)
         theta_prime = np.tensordot(np.diag(inv_lambdas), theta_prime, axes=(1,0)) #(chi, chi, d) 
@@ -141,7 +142,7 @@ class MPS:
         theta_prime = np.tensordot(theta, TimeOp, axes=(2,1))
         theta_prime = theta_prime.reshape((self.chi, self.chi, self.d, self.d))
 
-        self.decompose_contraction(theta_prime, i)
+        self.decompose_contraction(theta_prime, i, normalize)
         return 
    
     def TEBD_3_sets(self, TimeOp_leg, TimeOp_rung, Diss_arr, normalize, Diss_bool):
@@ -152,17 +153,17 @@ class MPS:
                 # Apply swap (2,3) -> (3,2)
                 theta = self.contract(i+1,i+2)
                 theta = theta.transpose(0,1,3,2)
-                self.decompose_contraction(theta, i+1)
+                self.decompose_contraction(theta, i+1, normalize)
                 
                 self.apply_twosite(TimeOp_leg, i, normalize)
            
                 # Apply swap (3,2) -> (2,3)
                 theta = self.contract(i+1,i+2)
                 theta = theta.transpose(0,1,3,2)
-                self.decompose_contraction(theta, i+1)
+                self.decompose_contraction(theta, i+1, normalize)
         if Diss_bool:
             for i in range(len(Diss_arr["index"])):
-                self.apply_singlesite(Diss_arr["TimeOp"][i], Diss_arr["index"][i], normalize)
+                self.apply_singlesite(Diss_arr["TimeOp"][i], Diss_arr["index"][i])
         return
             
         
@@ -173,7 +174,7 @@ class MPS:
             # Apply swap (2,3) -> (3,2)
             theta = self.contract(i+1,i+2)
             theta = theta.transpose(0,1,3,2)
-            self.decompose_contraction(theta, i+1)
+            self.decompose_contraction(theta, i+1, normalize)
             
             self.apply_twosite(TimeOp_leg, i, normalize)
             self.apply_twosite(TimeOp_leg, i+2, normalize)
@@ -181,14 +182,14 @@ class MPS:
             # Apply swap (3,2) -> (2,3)
             theta = self.contract(i+1,i+2)
             theta = theta.transpose(0,1,3,2)
-            self.decompose_contraction(theta, i+1)
+            self.decompose_contraction(theta, i+1, normalize)
         #"""
         #"""
         for i in range(2, self.N-3, 4):
             # Apply swap (2,3) -> (3,2)
             theta = self.contract(i+1,i+2)
             theta = theta.transpose(0,1,3,2)
-            self.decompose_contraction(theta, i+1)
+            self.decompose_contraction(theta, i+1, normalize)
             
             self.apply_twosite(TimeOp_leg, i, normalize)
             self.apply_twosite(TimeOp_leg, i+2, normalize)
@@ -196,37 +197,28 @@ class MPS:
             # Apply swap (3,2) -> (2,3)
             theta = self.contract(i+1,i+2)
             theta = theta.transpose(0,1,3,2)
-            self.decompose_contraction(theta, i+1)
+            self.decompose_contraction(theta, i+1, normalize)
         #"""
         
         if Diss_bool:
             for i in range(len(Diss_arr["index"])):
-                self.apply_singlesite(Diss_arr["TimeOp"][i], Diss_arr["index"][i], normalize)
+                self.apply_singlesite(Diss_arr["TimeOp"][i], Diss_arr["index"][i])
         return
     
-    def sign_flip_check(self, Sz_array):
-        """ Checks which sites have experienced a sign flip <Sz> not due to a zero-crossing 
-            The global variable flip_threshold determines to ingnore a site due to a likely zero-crossing """
-        Sz_array[ np.where(np.abs(Sz_array[:,-2])<flip_threshold) , :] = 0
-        flipped_sites = np.sign(Sz_array[:,-2]) - np.sign(Sz_array[:,-1])
-        flipped_sites = np.nonzero(flipped_sites)[0]
-        self.flipped_factor[flipped_sites] *= -1
-        return flipped_sites
     
     def expval(self, Op, site):
         """ Calculates the expectation value of an operator Op for a single site """
-        if self.is_density:     #In case of density matrices we must take the trace 
-            self.apply_singlesite(Op, site, False)
-            a = self.calculate_vidal_inner(NORM_state)
-            self.apply_singlesite(Op, site, False)
-            return a
-            #return np.real(np.tensordot(theta_prime, NORM_state.singlesite_thetas, axes=([0,1,2],[2,1,0])))
+        if self.is_density:     #In case of density matrices we must take the trace  
+            Gamma_temp = self.Gamma_mat[site].copy()
+            self.apply_singlesite(Op, site)
+            result = self.calculate_vidal_inner(NORM_state)
+            self.Gamma_mat[site] = Gamma_temp
+            return result
         else:
             theta = self.contract(site,site) #(chi, chi, d)
             theta_prime = np.tensordot(theta, Op, axes=(2,1)) #(chi, chi, d)
             return np.real(np.tensordot(theta_prime, np.conj(theta), axes=([0,1,2],[0,1,2])))
-            
-            
+    
     def expval_chain(self, Op):
         """ Calculates expectation values from the left side, by reusing the already
             contracted part left of the site we want to know our expectation value of
@@ -235,7 +227,7 @@ class MPS:
         Left_overlap = np.eye(self.chi)
         
         for i in range(N):
-            self.apply_singlesite(Op, i, False)
+            self.apply_singlesite(Op, i)
             st1 = np.tensordot(self.Gamma_mat[i,:,:,:],np.diag(self.Lambda_mat[i+1,:]), axes=(2,0)) #(d, chi, chi)
             sub_expval = np.tensordot(Left_overlap, np.conj(st1), axes=(0,1)) #(chi, d, chi)
             sub_expval = np.tensordot(sub_expval, NORM_state.singlesite_thetas, axes=([1,0],[0,1])) #(chi, chi)
@@ -244,14 +236,14 @@ class MPS:
                 sub_expval = np.tensordot(sub_expval, np.conj(temp), axes=(0,1)) #(chi, d, chi)
                 sub_expval = np.tensordot(sub_expval, NORM_state.singlesite_thetas, axes=([1,0],[0,1])) #(chi, chi)
             expvals[i] = np.real(sub_expval[0,0])
-            self.apply_singlesite(Op, i, False)
+            self.apply_singlesite(Op, i)
             
             st1 = np.tensordot(self.Gamma_mat[i,:,:,:],np.diag(self.Lambda_mat[i+1,:]), axes=(2,0)) #(d, chi, chi)
             Left_overlap = np.tensordot(Left_overlap, np.conj(st1), axes=(0,1)) #(chi, d, chi)
             Left_overlap = np.tensordot(Left_overlap, NORM_state.singlesite_thetas, axes=([1,0],[0,1])) #(chi, chi)
         norm = np.real(Left_overlap[0,0])
         return expvals, norm
-       
+        
         
     def calculate_vidal_inner(self, MPS2):
         """ Calculates the inner product of the MPS with another MPS """
@@ -263,13 +255,7 @@ class MPS:
             m_total = np.tensordot(m_total, np.conj(st1), axes=(0,1)) #(chi, d, chi)
             m_total = np.tensordot(m_total, st2, axes=([1,0],[0,1])) #(chi, chi)
         return np.real(m_total[0,0])
-    
-    def calculate_norm(self):
-        """ Calculates the norm of the MPS """
-        if self.is_density:
-            return self.calculate_vidal_inner(NORM_state)
-        else: 
-            return self.calculate_vidal_inner(self)
+
     
     def time_evolution(self, TimeEvol_obj, normalize, steps, track_normalization):
         if TimeEvol_obj.is_density != self.is_density:
@@ -289,8 +275,6 @@ class MPS:
         else:
             Sz_exp_op = Sz
         
-        if track_normalization:
-            Normalization = np.zeros(steps)        
            
         #### Time evolution steps
         print(f"Starting time evolution of {self.name}")
@@ -312,13 +296,16 @@ class MPS:
             for i in range(self.N):
                 Sz_expvals[i,t] = self.expval(Sz_exp_op, i)
             """
-            Sz_expvals[:,t], Normalization[t] = self.expval_chain(Sz_exp_op)
-            self.normalization = np.append(self.normalization, Normalization[t])
+            if self.is_density:
+                Sz_expvals[:,t], temp_trace = self.expval_chain(Sz_exp_op)
+                Sz_expvals[:,t] *= 1/temp_trace
+                self.trace = np.append(self.trace, temp_trace)
+                self.normalization = np.append(self.normalization, self.calculate_vidal_inner(self))
+            else:
+                self.normalization = np.append(self.normalization, self.calculate_vidal_inner(self))
+                for i in range(self.N):
+                    Sz_expvals[i,t] = self.expval(Sz_exp_op, i)
             
-            if (t>=1 and self.is_density):
-                Sz_expvals[:,t] *= self.flipped_factor
-                sign_flips = self.sign_flip_check(Sz_expvals[:,t-1:t+1].copy())
-                Sz_expvals[sign_flips,t] *= -1
                 
             self.TEBD(TimeOp_leg, TimeOp_rung, Diss_arr, normalize, Diss_bool)
             #self.TEBD_3_sets(TimeOp_leg, TimeOp_rung, Diss_arr, normalize, Diss_bool)
@@ -337,12 +324,19 @@ class MPS:
         plt.show()
         
         if track_normalization:
-            plt.plot(time_axis, Normalization)
+            plt.plot(time_axis, self.normalization[-steps:])
             plt.title(f"Normalization of {self.name} over time")
             plt.xlabel("Time")
             plt.ylabel("Normalization")
             plt.grid()
             plt.show()
+            if self.is_density:
+                plt.plot(time_axis, self.trace[-steps:])
+                plt.title(f"Trace of {self.name} over time")
+                plt.xlabel("Time")
+                plt.ylabel("Trace")
+                plt.grid()
+                plt.show()
         return
        
 
@@ -385,7 +379,7 @@ class Time_Operator:
     
     def Create_Ham(self):
         """ Create Hamiltonian for purestate """
-        H_arr_leg = -self.t_hopping/2 * (np.kron(Sx, Sx) + np.kron(Sy, Sy))
+        H_arr_leg = -self.t_hopping/2 * (np.kron(Sx, Sx) + np.kron(Sy, Sy) )#+ np.kron(Sz, Sz))
         H_arr_rung = self.U_coulomb/4 * np.kron(Sz+np.eye(self.d), Sz+np.eye(self.d))
         return H_arr_leg, H_arr_rung
         
@@ -565,18 +559,17 @@ t0 = time.time()
 N=8
 d=2
 chi=20      #MPS truncation parameter
-newchi=25   #DENS truncation parameter
+newchi=45   #DENS truncation parameter
 
 #im_steps = 0
 #im_dt = -0.03j
-steps=40
+steps=600
 dt = 0.02
 
-normalize = False
+normalize = True
 use_CN = False #choose if you want to use Crank-Nicolson approximation
 Diss_bool = False
 
-flip_threshold = 0.02 #Threshold below which an <Sz> sign flip is not flagged as being caused by the SVD
 
 
 #### Hamiltonian and Lindblad constants
@@ -634,11 +627,18 @@ def main():
         
     #time evolution of the state
     DENS1.time_evolution(TimeEvol_obj_DENS, normalize, steps, True)
-    #MPS1.time_evolution(TimeEvol_obj_MPS, normalize, steps, True)
+    MPS1.time_evolution(TimeEvol_obj_MPS, normalize, steps, True)
     ####################################################### ^BOOL^: whether to track normalization    
-    expvals, norm = DENS1.expval_chain(np.kron(Sz, np.eye(2)))
 
-    
+
+    plt.plot(DENS1.Lambda_mat[int(N/2)], linestyle="", marker=".")
+    plt.grid()
+    plt.show()
+    #print(DENS1.Lambda_mat[4,-1])
+        
+    #plt.plot(MPS1.Lambda_mat[4], linestyle="", marker=".")
+    #plt.grid()
+    #plt.show()
     
 
     if save_state_bool:
